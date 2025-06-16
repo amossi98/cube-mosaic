@@ -47,6 +47,14 @@ app.get('/api/published', (req, res) => {
     });
 });
 
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'build')));
+
+// For any other route, serve index.html from the build
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 }); 
