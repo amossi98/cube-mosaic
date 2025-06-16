@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaHeart } from 'react-icons/fa';
 
-const API_URL = 'http://localhost:5050';
+const API_URL = '';
 
 const GalleryPage = () => {
     const [images, setImages] = useState([]);

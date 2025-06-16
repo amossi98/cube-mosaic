@@ -241,7 +241,7 @@ const DrawingPage = () => {
             formData.append('image', blob, filename);
             formData.append('name', publishName);
             formData.append('description', publishDesc);
-            fetch('http://localhost:5050/api/upload', {
+            fetch('/api/upload', {
                 method: 'POST',
                 body: formData,
             })
@@ -331,7 +331,7 @@ const DrawingPage = () => {
                 setHistoryIndex(0);
             };
             img.crossOrigin = 'Anonymous';
-            img.src = `http://localhost:5050/published/${imgData.filename}`;
+            img.src = `/published/${imgData.filename}`;
             localStorage.removeItem('importedImage');
         }
         // eslint-disable-next-line
