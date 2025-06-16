@@ -1,24 +1,32 @@
-import logo from './logo.svg';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
+import DrawingPage from './DrawingPage';
+import GalleryPage from './GalleryPage';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div style={{ minHeight: '100vh', background: '#f5f5f7' }}>
+        <nav style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          background: '#fff',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          borderRadius: 16,
+          margin: '32px auto 0',
+          width: 'fit-content',
+          padding: '12px 48px',
+        }}>
+          <Link to="/" style={{ marginRight: 32, fontWeight: 600, fontSize: 20, color: '#222', textDecoration: 'none', letterSpacing: -0.5 }}>Draw</Link>
+          <Link to="/gallery" style={{ fontWeight: 600, fontSize: 20, color: '#222', textDecoration: 'none', letterSpacing: -0.5 }}>Gallery</Link>
+        </nav>
+        <Routes>
+          <Route path="/" element={<DrawingPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 
