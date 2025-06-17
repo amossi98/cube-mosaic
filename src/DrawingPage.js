@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { saveAs } from 'file-saver';
 import { FaFillDrip } from 'react-icons/fa';
+import { supabase } from './supabaseClient';
 const bucketCursor =
     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="%230071e3" d="M16 2l-6 6 2 2-8 8 2 2 8-8 2 2 6-6-2-2zm-6 18c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4z"/></svg>';
 
@@ -235,28 +236,45 @@ const DrawingPage = () => {
                 ctx.fillRect(c, r, 1, 1);
             }
         }
-        canvas.toBlob(blob => {
-            const formData = new FormData();
+        canvas.toBlob(async (blob) => {
             const filename = `${publishName || 'drawing'}_${Date.now()}_${width}x${height}.png`;
-            formData.append('image', blob, filename);
-            formData.append('name', publishName);
-            formData.append('description', publishDesc);
-            fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Image published successfully!');
-                        setShowPublishModal(false);
-                        setPublishName('');
-                        setPublishDesc('');
-                    } else {
-                        alert('Failed to publish image.');
-                    }
-                })
-                .catch(() => alert('Failed to publish image.'));
+
+            // 1. Upload to Supabase Storage
+            const { data: storageData, error: storageError } = await supabase
+                .storage
+                .from('images') // Make sure you have a bucket named 'images'
+                .upload(filename, blob, { contentType: 'image/png' });
+
+            if (storageError) {
+                alert('Failed to upload image to storage.');
+                return;
+            }
+
+            // 2. Get public URL
+            const { data: publicUrlData } = supabase
+                .storage
+                .from('images')
+                .getPublicUrl(filename);
+
+            // 3. Insert metadata into images table
+            const { error: dbError } = await supabase
+                .from('images')
+                .insert([{
+                    name: publishName,
+                    description: publishDesc,
+                    url: publicUrlData.publicUrl,
+                    created_at: new Date().toISOString(),
+                }]);
+
+            if (dbError) {
+                alert('Failed to save image metadata.');
+                return;
+            }
+
+            alert('Image published successfully!');
+            setShowPublishModal(false);
+            setPublishName('');
+            setPublishDesc('');
         }, 'image/png');
     };
 
@@ -525,7 +543,7 @@ const DrawingPage = () => {
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
                             <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handleDownload}>Download</button>
                             <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => fileInputRef.current.click()}>Upload</button>
-                            <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handlePublish}>Import</button>
+                            <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handlePublish}>Publish</button>
                         </div>
                         {/* Publish Modal */}
                         {showPublishModal && (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaHeart } from 'react-icons/fa';
+import { supabase } from './supabaseClient';
 
 const API_URL = '';
 
@@ -11,14 +12,19 @@ const GalleryPage = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetch(`${API_URL}/api/published`)
-            .then(res => res.json())
-            .then(data => setImages(data))
-            .catch(() => setImages([]));
+        async function fetchImages() {
+            const { data, error } = await supabase
+                .from('images')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) setImages([]);
+            else setImages(data);
+        }
+        fetchImages();
     }, []);
 
-    const getLikes = (filename) => Number(localStorage.getItem('like_' + filename) || 0);
-    const setLikes = (filename, val) => localStorage.setItem('like_' + filename, val);
+    const getLikes = (img) => Number(localStorage.getItem('like_' + (img.id || img.url)) || 0);
+    const setLikes = (img, val) => localStorage.setItem('like_' + (img.id || img.url), val);
 
     const handleImageClick = (img) => {
         setSelected(img);
@@ -33,9 +39,9 @@ const GalleryPage = () => {
     };
 
     const handleLike = (img) => {
-        const current = getLikes(img.filename);
-        setLikes(img.filename, current + 1);
-        setImages(images => images.map(i => i.filename === img.filename ? { ...i } : i)); // force re-render
+        const current = getLikes(img);
+        setLikes(img, current + 1);
+        setImages(images => images.map(i => (i.id === img.id ? { ...i } : i))); // force re-render
     };
 
     return (
@@ -58,7 +64,7 @@ const GalleryPage = () => {
                 }}>
                     {images.map((img, idx) => (
                         <div
-                            key={img.filename}
+                            key={img.id || img.url || idx}
                             style={{
                                 border: '1px solid #ccc',
                                 borderRadius: 8,
@@ -76,7 +82,7 @@ const GalleryPage = () => {
                             onMouseLeave={() => setHoveredIdx(null)}
                         >
                             <img
-                                src={`${API_URL}/published/${img.filename}`}
+                                src={img.url}
                                 alt={img.name || `Published ${idx}`}
                                 style={{
                                     width: '100%',
@@ -90,7 +96,7 @@ const GalleryPage = () => {
                             <div style={{ padding: 8, textAlign: 'center', fontSize: 16, fontWeight: 600 }}>{img.name || img.filename}</div>
                             <button onClick={e => { e.stopPropagation(); handleLike(img); }} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'absolute', top: 12, right: 12 }}>
                                 <FaHeart color="#e74c3c" size={22} />
-                                <span style={{ marginLeft: 6, color: '#e74c3c', fontWeight: 600 }}>{getLikes(img.filename)}</span>
+                                <span style={{ marginLeft: 6, color: '#e74c3c', fontWeight: 600 }}>{getLikes(img)}</span>
                             </button>
                         </div>
                     ))}
@@ -102,15 +108,15 @@ const GalleryPage = () => {
                         onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}
                     >
                         <div style={{ background: '#fff', borderRadius: 12, padding: 32, minWidth: 320, boxShadow: '0 2px 16px rgba(0,0,0,0.12)', maxWidth: 400 }}>
-                            <img src={`${API_URL}/published/${selected.filename}`} alt={selected.name} style={{ width: '100%', height: 200, objectFit: 'contain', imageRendering: 'pixelated', background: '#eee', display: 'block', marginBottom: 16 }} />
+                            <img src={selected.url} alt={selected.name} style={{ width: '100%', height: 200, objectFit: 'contain', imageRendering: 'pixelated', background: '#eee', display: 'block', marginBottom: 16 }} />
                             <h2 style={{ marginBottom: 8, textAlign: 'center' }}>{selected.name || selected.filename}</h2>
                             <div style={{ marginBottom: 16, color: '#555', textAlign: 'center' }}>{selected.description}</div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                                 <button onClick={() => setSelected(null)} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#eee', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Close</button>
                                 <button onClick={handleImport} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Import</button>
                                 <a
-                                    href={`${API_URL}/published/${selected.filename}`}
-                                    download={selected.filename}
+                                    href={selected.url}
+                                    download={selected.name || selected.filename || 'drawing.png'}
                                     style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer', textDecoration: 'none', display: 'inline-block' }}
                                 >
                                     Download
