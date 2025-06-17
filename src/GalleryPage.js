@@ -17,8 +17,13 @@ const GalleryPage = () => {
                 .from('images')
                 .select('*')
                 .order('created_at', { ascending: false });
-            if (error) setImages([]);
-            else setImages(data);
+            if (error) {
+                console.error('Error fetching images:', error);
+                setImages([]);
+            } else {
+                console.log('Fetched images:', data);
+                setImages(data);
+            }
         }
         fetchImages();
     }, []);

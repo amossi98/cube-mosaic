@@ -279,7 +279,7 @@ const DrawingPage = () => {
                 console.log('Public URL:', publicUrlData);
 
                 // 3. Insert metadata into images table
-                const { error: dbError } = await supabase
+                const { data: insertData, error: dbError } = await supabase
                     .from('images')
                     .insert([{
                         name: publishName,
@@ -293,6 +293,7 @@ const DrawingPage = () => {
                     alert(`Failed to save image metadata: ${dbError.message}`);
                     return;
                 }
+                console.log('Inserted metadata:', insertData);
 
                 alert('Image published successfully!');
                 setShowPublishModal(false);
