@@ -239,42 +239,57 @@ const DrawingPage = () => {
         canvas.toBlob(async (blob) => {
             const filename = `${publishName || 'drawing'}_${Date.now()}_${width}x${height}.png`;
 
-            // 1. Upload to Supabase Storage
-            const { data: storageData, error: storageError } = await supabase
-                .storage
-                .from('images') // Make sure you have a bucket named 'images'
-                .upload(filename, blob, { contentType: 'image/png' });
+            try {
+                // 1. Upload to Supabase Storage
+                const { data: storageData, error: storageError } = await supabase
+                    .storage
+                    .from('images')
+                    .upload(filename, blob, {
+                        contentType: 'image/png',
+                        cacheControl: '3600',
+                        upsert: false
+                    });
 
-            if (storageError) {
-                alert('Failed to upload image to storage.');
-                return;
+                if (storageError) {
+                    console.error('Storage Error:', storageError);
+                    alert(`Failed to upload image to storage: ${storageError.message}`);
+                    return;
+                }
+
+                console.log('Storage Success:', storageData);
+
+                // 2. Get public URL
+                const { data: publicUrlData } = supabase
+                    .storage
+                    .from('images')
+                    .getPublicUrl(filename);
+
+                console.log('Public URL:', publicUrlData);
+
+                // 3. Insert metadata into images table
+                const { error: dbError } = await supabase
+                    .from('images')
+                    .insert([{
+                        name: publishName,
+                        description: publishDesc,
+                        url: publicUrlData.publicUrl,
+                        created_at: new Date().toISOString(),
+                    }]);
+
+                if (dbError) {
+                    console.error('Database Error:', dbError);
+                    alert(`Failed to save image metadata: ${dbError.message}`);
+                    return;
+                }
+
+                alert('Image published successfully!');
+                setShowPublishModal(false);
+                setPublishName('');
+                setPublishDesc('');
+            } catch (error) {
+                console.error('Unexpected Error:', error);
+                alert(`An unexpected error occurred: ${error.message}`);
             }
-
-            // 2. Get public URL
-            const { data: publicUrlData } = supabase
-                .storage
-                .from('images')
-                .getPublicUrl(filename);
-
-            // 3. Insert metadata into images table
-            const { error: dbError } = await supabase
-                .from('images')
-                .insert([{
-                    name: publishName,
-                    description: publishDesc,
-                    url: publicUrlData.publicUrl,
-                    created_at: new Date().toISOString(),
-                }]);
-
-            if (dbError) {
-                alert('Failed to save image metadata.');
-                return;
-            }
-
-            alert('Image published successfully!');
-            setShowPublishModal(false);
-            setPublishName('');
-            setPublishDesc('');
         }, 'image/png');
     };
 
