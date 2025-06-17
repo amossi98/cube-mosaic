@@ -238,9 +238,21 @@ const DrawingPage = () => {
         }
         canvas.toBlob(async (blob) => {
             const filename = `${publishName || 'drawing'}_${Date.now()}_${width}x${height}.png`;
+            console.log('Attempting to upload file:', filename, 'Size:', blob.size);
 
             try {
+                // First, let's check if the bucket exists
+                const { data: buckets, error: bucketsError } = await supabase
+                    .storage
+                    .listBuckets();
+
+                console.log('Available buckets:', buckets);
+                if (bucketsError) {
+                    console.error('Error listing buckets:', bucketsError);
+                }
+
                 // 1. Upload to Supabase Storage
+                console.log('Starting upload to storage...');
                 const { data: storageData, error: storageError } = await supabase
                     .storage
                     .from('images')
