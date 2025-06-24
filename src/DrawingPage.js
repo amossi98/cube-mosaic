@@ -68,6 +68,10 @@ const DrawingPage = () => {
     const [publishDesc, setPublishDesc] = useState('');
     const [bucketMode, setBucketMode] = useState(false);
     const [bucketHighlight, setBucketHighlight] = useState([]);
+    const [images, setImages] = useState([]);
+    const [likedImages, setLikedImages] = useState(() =>
+        JSON.parse(localStorage.getItem('likedImages') || '[]')
+    );
 
     const handleCreateCanvas = () => {
         if (!isValidSize(width) || !isValidSize(height)) {
@@ -382,6 +386,37 @@ const DrawingPage = () => {
         }
         // eslint-disable-next-line
     }, []);
+
+    useEffect(() => {
+        // Fetch images from Supabase
+        const fetchImages = async () => {
+            const { data, error } = await supabase.from('images').select('*');
+            if (!error) setImages(data);
+        };
+        fetchImages();
+    }, []);
+
+    const handleLike = async (imageId, alreadyLiked) => {
+        setImages(prev =>
+            prev.map(img =>
+                img.id === imageId
+                    ? { ...img, likes: img.likes + (alreadyLiked ? -1 : 1) }
+                    : img
+            )
+        );
+        let updatedLikedImages;
+        if (alreadyLiked) {
+            updatedLikedImages = likedImages.filter(id => id !== imageId);
+        } else {
+            updatedLikedImages = [...likedImages, imageId];
+        }
+        setLikedImages(updatedLikedImages);
+        localStorage.setItem('likedImages', JSON.stringify(updatedLikedImages));
+        await supabase.rpc('increment_likes', {
+            image_id: imageId,
+            increment: alreadyLiked ? -1 : 1,
+        });
+    };
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f5f5f7' }}>

@@ -9,27 +9,27 @@ const GalleryPage = () => {
     const [images, setImages] = useState([]);
     const [selected, setSelected] = useState(null);
     const [hoveredIdx, setHoveredIdx] = useState(null);
+    const [likedImages, setLikedImages] = useState(() => {
+        return JSON.parse(localStorage.getItem('likedImages') || '[]');
+    });
+    const [sortBy, setSortBy] = useState('relevant'); // 'relevant', 'likes', 'date'
     const navigate = useNavigate();
 
     useEffect(() => {
-        async function fetchImages() {
-            const { data, error } = await supabase
-                .from('images')
-                .select('*')
-                .order('created_at', { ascending: false });
-            if (error) {
-                console.error('Error fetching images:', error);
-                setImages([]);
+        const fetchImages = async () => {
+            let query = supabase.from('images').select('*');
+            if (sortBy === 'likes') {
+                query = query.order('likes', { ascending: false });
+            } else if (sortBy === 'date') {
+                query = query.order('created_at', { ascending: false });
             } else {
-                console.log('Fetched images:', data);
-                setImages(data);
+                query = query.order('created_at', { ascending: false }); // Default relevant = date desc
             }
-        }
+            const { data, error } = await query;
+            if (!error && data) setImages(data);
+        };
         fetchImages();
-    }, []);
-
-    const getLikes = (img) => Number(localStorage.getItem('like_' + (img.id || img.url)) || 0);
-    const setLikes = (img, val) => localStorage.setItem('like_' + (img.id || img.url), val);
+    }, [sortBy]);
 
     const handleImageClick = (img) => {
         setSelected(img);
@@ -43,10 +43,32 @@ const GalleryPage = () => {
         }
     };
 
-    const handleLike = (img) => {
-        const current = getLikes(img);
-        setLikes(img, current + 1);
-        setImages(images => images.map(i => (i.id === img.id ? { ...i } : i))); // force re-render
+    const handleLike = async (imageId, alreadyLiked) => {
+        setImages(prev =>
+            prev.map(img =>
+                img.id === imageId
+                    ? { ...img, likes: img.likes + (alreadyLiked ? -1 : 1) }
+                    : img
+            )
+        );
+        let updatedLikedImages;
+        if (alreadyLiked) {
+            updatedLikedImages = likedImages.filter(id => id !== imageId);
+        } else {
+            updatedLikedImages = [...likedImages, imageId];
+        }
+        setLikedImages(updatedLikedImages);
+        localStorage.setItem('likedImages', JSON.stringify(updatedLikedImages));
+        const { error } = await supabase.rpc('increment_likes', {
+            image_id: imageId,
+            increment: alreadyLiked ? -1 : 1,
+        });
+        if (error) {
+            alert('Error updating like!');
+        }
+        // Re-fetch images to get the updated like count from the database
+        const { data, error: fetchError } = await supabase.from('images').select('*').order('created_at', { ascending: false });
+        if (!fetchError && data) setImages(data);
     };
 
     return (
@@ -55,9 +77,9 @@ const GalleryPage = () => {
                 <h1 style={{ textAlign: 'center', fontWeight: 700, fontSize: 36, letterSpacing: -1, color: '#222' }}>Gallery</h1>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 16px 0' }}>
                     <div style={{ display: 'flex', gap: 16 }}>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#eee', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Sort by: Relevant</button>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#eee', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Sort by: Likes</button>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#eee', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Sort by: Date</button>
+                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'relevant' ? '#0071e3' : '#eee', color: sortBy === 'relevant' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('relevant')}>Sort by: Relevant</button>
+                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'likes' ? '#0071e3' : '#eee', color: sortBy === 'likes' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('likes')}>Sort by: Likes</button>
+                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'date' ? '#0071e3' : '#eee', color: sortBy === 'date' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('date')}>Sort by: Date</button>
                     </div>
                     <input type="text" placeholder="Search..." style={{ padding: 8, borderRadius: 8, border: '1px solid #ccc', fontSize: 16, width: 200 }} />
                 </div>
@@ -67,44 +89,47 @@ const GalleryPage = () => {
                     gap: 16,
                     marginTop: 32,
                 }}>
-                    {images.map((img, idx) => (
-                        <div
-                            key={img.id || img.url || idx}
-                            style={{
-                                border: '1px solid #ccc',
-                                borderRadius: 8,
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                background: '#fff',
-                                boxShadow: hoveredIdx === idx ? '0 6px 24px rgba(0,0,0,0.10)' : '0 2px 8px rgba(0,0,0,0.07)',
-                                position: 'relative',
-                                transform: hoveredIdx === idx ? 'scale(1.06)' : 'scale(1)',
-                                transition: 'box-shadow 0.2s, transform 0.2s',
-                                zIndex: hoveredIdx === idx ? 2 : 1,
-                            }}
-                            onClick={() => handleImageClick(img)}
-                            onMouseEnter={() => setHoveredIdx(idx)}
-                            onMouseLeave={() => setHoveredIdx(null)}
-                        >
-                            <img
-                                src={img.url}
-                                alt={img.name || `Published ${idx}`}
+                    {images.map((img, idx) => {
+                        const isLiked = likedImages.includes(img.id);
+                        return (
+                            <div
+                                key={img.id || img.url || idx}
                                 style={{
-                                    width: '100%',
-                                    height: 200,
-                                    objectFit: 'contain',
-                                    imageRendering: 'pixelated',
-                                    background: '#eee',
-                                    display: 'block',
+                                    border: '1px solid #ccc',
+                                    borderRadius: 8,
+                                    overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    background: '#fff',
+                                    boxShadow: hoveredIdx === idx ? '0 6px 24px rgba(0,0,0,0.10)' : '0 2px 8px rgba(0,0,0,0.07)',
+                                    position: 'relative',
+                                    transform: hoveredIdx === idx ? 'scale(1.06)' : 'scale(1)',
+                                    transition: 'box-shadow 0.2s, transform 0.2s',
+                                    zIndex: hoveredIdx === idx ? 2 : 1,
                                 }}
-                            />
-                            <div style={{ padding: 8, textAlign: 'center', fontSize: 16, fontWeight: 600 }}>{img.name || img.filename}</div>
-                            <button onClick={e => { e.stopPropagation(); handleLike(img); }} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'absolute', top: 12, right: 12 }}>
-                                <FaHeart color="#e74c3c" size={22} />
-                                <span style={{ marginLeft: 6, color: '#e74c3c', fontWeight: 600 }}>{getLikes(img)}</span>
-                            </button>
-                        </div>
-                    ))}
+                                onClick={() => handleImageClick(img)}
+                                onMouseEnter={() => setHoveredIdx(idx)}
+                                onMouseLeave={() => setHoveredIdx(null)}
+                            >
+                                <img
+                                    src={img.url}
+                                    alt={img.name || `Published ${idx}`}
+                                    style={{
+                                        width: '100%',
+                                        height: 200,
+                                        objectFit: 'contain',
+                                        imageRendering: 'pixelated',
+                                        background: '#eee',
+                                        display: 'block',
+                                    }}
+                                />
+                                <div style={{ padding: 8, textAlign: 'center', fontSize: 16, fontWeight: 600 }}>{img.name || img.filename}</div>
+                                <button onClick={(e) => { e.stopPropagation(); handleLike(img.id, isLiked); }} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'absolute', top: 12, right: 12 }}>
+                                    <FaHeart color={isLiked ? "#e74c3c" : "#ccc"} size={22} />
+                                    <span style={{ marginLeft: 6, color: isLiked ? "#e74c3c" : "#ccc", fontWeight: 600 }}>{img.likes}</span>
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
                 {/* Modal for selected image */}
                 {selected && (
