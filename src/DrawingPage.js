@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { saveAs } from 'file-saver';
 import { FaFillDrip } from 'react-icons/fa';
 import { supabase } from './supabaseClient';
+import jsPDF from 'jspdf';
 const bucketCursor =
     'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="%230071e3" d="M16 2l-6 6 2 2-8 8 2 2 8-8 2 2 6-6-2-2zm-6 18c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4z"/></svg>';
 
@@ -50,8 +51,10 @@ function findClosestColor(r, g, b) {
 }
 
 const DrawingPage = () => {
-    const [width, setWidth] = useState(15);
-    const [height, setHeight] = useState(15);
+    const [numCubesX, setNumCubesX] = useState(5);
+    const [numCubesY, setNumCubesY] = useState(5);
+    const width = numCubesX * 3;
+    const height = numCubesY * 3;
     const [canvasCreated, setCanvasCreated] = useState(false);
     const [error, setError] = useState('');
     const [selectedColor, setSelectedColor] = useState(COLORS[0].value);
@@ -74,8 +77,8 @@ const DrawingPage = () => {
     );
 
     const handleCreateCanvas = () => {
-        if (!isValidSize(width) || !isValidSize(height)) {
-            setError(`Both width and height must be between ${MIN_SIZE} and ${MAX_SIZE}, and multiples of ${STEP}.`);
+        if (!Number.isInteger(numCubesX) || numCubesX < 5 || numCubesX > 17 || !Number.isInteger(numCubesY) || numCubesY < 5 || numCubesY > 17) {
+            setError('Number of cubes must be an integer between 5 and 17 for both width and height.');
             return;
         }
         setError('');
@@ -349,6 +352,190 @@ const DrawingPage = () => {
         return component;
     };
 
+    const handleDownloadInstructions = () => {
+        if (!canvasCreated) {
+            alert('Create a canvas first!');
+            return;
+        }
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        const blockSize = 3;
+        const numBlocksX = Math.ceil(width / blockSize);
+        const numBlocksY = Math.ceil(height / blockSize);
+        const superBlockSize = 3; // 3x3 blocks per super-block
+        const margin = 32;
+        const blockRenderSize = 48; // px per block in PDF
+        const blockGap = 8;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        // --- First Page: Title, Border, and Original Image with High-Res Grid and Coordinates ---
+        doc.setDrawColor(60, 60, 60);
+        doc.setLineWidth(4);
+        doc.roundedRect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin, 24, 24, 'S');
+        doc.setFontSize(28);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Mosaic Assembly Instructions', pageWidth / 2, margin + 24, { align: 'center' });
+
+        // Draw the original mosaic as a zoomed image in the center
+        const previewSize = Math.min(pageWidth - 2 * margin, 320);
+        const previewX = (pageWidth - previewSize) / 2;
+        const previewY = margin + 70;
+
+        // Create a canvas for the mosaic
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = width;
+        previewCanvas.height = height;
+        const ctx = previewCanvas.getContext('2d');
+        for (let r = 0; r < height; r++) {
+            for (let c = 0; c < width; c++) {
+                ctx.fillStyle = grid[r][c];
+                ctx.fillRect(c, r, 1, 1);
+            }
+        }
+        const imgData = previewCanvas.toDataURL('image/png');
+        doc.addImage(
+            imgData,
+            'PNG',
+            previewX,
+            previewY,
+            previewSize,
+            previewSize
+        );
+
+        // Now overlay high-res grid lines and coordinates using jsPDF
+        const blocksX = Math.ceil(width / 3);
+        const blocksY = Math.ceil(height / 3);
+
+        // Calculate the scale from pixel art to PDF preview
+        const scaleX = previewSize / width;
+        const scaleY = previewSize / height;
+
+        // Draw vertical grid lines
+        doc.setDrawColor(80, 80, 80);
+        doc.setLineWidth(1.2);
+        for (let bx = 1; bx < blocksX; bx++) {
+            const x = previewX + bx * 3 * scaleX;
+            doc.line(x, previewY, x, previewY + previewSize);
+        }
+        // Draw horizontal grid lines
+        for (let by = 1; by < blocksY; by++) {
+            const y = previewY + by * 3 * scaleY;
+            doc.line(previewX, y, previewX + previewSize, y);
+        }
+
+        // Draw coordinates (A, B, C...) on top, (1, 2, 3...) on left
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        // Top coordinates
+        for (let bx = 0; bx < blocksX; bx++) {
+            const label = String.fromCharCode(65 + bx);
+            const x = previewX + (bx * 3 + 1.5) * scaleX;
+            doc.text(label, x, previewY - 8, { align: 'center' });
+        }
+        // Left coordinates
+        for (let by = 0; by < blocksY; by++) {
+            const label = (by + 1).toString();
+            const y = previewY + (by * 3 + 1.5) * scaleY;
+            doc.text(label, previewX - 10, y + 4, { align: 'right', baseline: 'middle' });
+        }
+
+        doc.setDrawColor(120, 120, 120);
+        doc.setLineWidth(2);
+        doc.roundedRect(previewX - 8, previewY - 8, previewSize + 16, previewSize + 16, 12, 12, 'S');
+        doc.addPage();
+
+        // --- Super-blocks ---
+        const numSuperBlocksX = Math.ceil(numBlocksX / superBlockSize);
+        const numSuperBlocksY = Math.ceil(numBlocksY / superBlockSize);
+
+        for (let sby = 0; sby < numSuperBlocksY; sby++) {
+            for (let sbx = 0; sbx < numSuperBlocksX; sbx++) {
+                // Calculate how many blocks in this super-block (handle edge cases)
+                const blocksInX = Math.min(superBlockSize, numBlocksX - sbx * superBlockSize);
+                const blocksInY = Math.min(superBlockSize, numBlocksY - sby * superBlockSize);
+
+                // Title for this super-block
+                const colStart = String.fromCharCode(65 + sbx * superBlockSize);
+                const colEnd = String.fromCharCode(65 + sbx * superBlockSize + blocksInX - 1);
+                const rowStart = 1 + sby * superBlockSize;
+                const rowEnd = rowStart + blocksInY - 1;
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'bold');
+                doc.text(
+                    `Blocks ${colStart}-${colEnd} x ${rowStart}-${rowEnd}`,
+                    pageWidth / 2,
+                    margin + 10,
+                    { align: 'center' }
+                );
+
+                // Calculate grid size for this super-block
+                const gridRenderWidth = blocksInX * blockRenderSize + (blocksInX - 1) * blockGap;
+                const gridRenderHeight = blocksInY * blockRenderSize + (blocksInY - 1) * blockGap;
+                const startX = (pageWidth - gridRenderWidth) / 2;
+                let startY = margin + 40;
+
+                // Draw the blocks in their correct positions
+                for (let by = 0; by < blocksInY; by++) {
+                    for (let bx = 0; bx < blocksInX; bx++) {
+                        const blockGlobalX = sbx * superBlockSize + bx;
+                        const blockGlobalY = sby * superBlockSize + by;
+                        const blockName = String.fromCharCode(65 + blockGlobalX) + (blockGlobalY + 1);
+
+                        // Position in PDF
+                        const blockX = startX + bx * (blockRenderSize + blockGap);
+                        const blockY = startY + by * (blockRenderSize + blockGap);
+
+                        // Draw block label above the block
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(blockName, blockX + blockRenderSize / 2, blockY - 4, { align: 'center' });
+
+                        // Draw block border
+                        doc.setDrawColor(80, 80, 80);
+                        doc.setLineWidth(1.5);
+                        doc.roundedRect(blockX - 2, blockY - 2, blockRenderSize + 4, blockRenderSize + 4, 4, 4, 'S');
+
+                        // Draw the 3x3 block (handle edge cases)
+                        for (let dy = 0; dy < blockSize; dy++) {
+                            for (let dx = 0; dx < blockSize; dx++) {
+                                const px = blockGlobalX * blockSize + dx;
+                                const py = blockGlobalY * blockSize + dy;
+                                if (px < width && py < height) {
+                                    const color = grid[py][px];
+                                    doc.setFillColor(color);
+                                    doc.rect(
+                                        blockX + dx * (blockRenderSize / blockSize),
+                                        blockY + dy * (blockRenderSize / blockSize),
+                                        blockRenderSize / blockSize,
+                                        blockRenderSize / blockSize,
+                                        'F'
+                                    );
+                                    // Optionally, add a border to each mini-cube
+                                    doc.setDrawColor(180, 180, 180);
+                                    doc.rect(
+                                        blockX + dx * (blockRenderSize / blockSize),
+                                        blockY + dy * (blockRenderSize / blockSize),
+                                        blockRenderSize / blockSize,
+                                        blockRenderSize / blockSize,
+                                        'S'
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Add a new page for the next super-block, unless it's the last one
+                if (!(sby === numSuperBlocksY - 1 && sbx === numSuperBlocksX - 1)) {
+                    doc.addPage();
+                }
+            }
+        }
+
+        doc.save('mosaic_instructions.pdf');
+    };
+
     useEffect(() => {
         // Import from gallery if present
         const imported = localStorage.getItem('importedImage');
@@ -356,19 +543,23 @@ const DrawingPage = () => {
             const imgData = JSON.parse(imported);
             const img = new window.Image();
             img.onload = () => {
-                // Set width and height to match the imported image
-                setWidth(img.width);
-                setHeight(img.height);
+                // Calculate number of cubes for X and Y
+                const cubesX = Math.ceil(img.width / 3);
+                const cubesY = Math.ceil(img.height / 3);
+                setNumCubesX(cubesX);
+                setNumCubesY(cubesY);
+
+                // Create the grid with the correct size
                 const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = img.width;
-                cropCanvas.height = img.height;
+                cropCanvas.width = cubesX * 3;
+                cropCanvas.height = cubesY * 3;
                 const cropCtx = cropCanvas.getContext('2d');
-                cropCtx.drawImage(img, 0, 0, img.width, img.height);
-                const imageData = cropCtx.getImageData(0, 0, img.width, img.height);
-                const newGrid = Array.from({ length: img.height }, () => Array(img.width).fill(COLORS[0].value));
-                for (let row = 0; row < img.height; row++) {
-                    for (let col = 0; col < img.width; col++) {
-                        const idx = (row * img.width + col) * 4;
+                cropCtx.drawImage(img, 0, 0, cropCanvas.width, cropCanvas.height);
+                const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+                const newGrid = Array.from({ length: cubesY * 3 }, () => Array(cubesX * 3).fill(COLORS[0].value));
+                for (let row = 0; row < cubesY * 3; row++) {
+                    for (let col = 0; col < cubesX * 3; col++) {
+                        const idx = (row * cropCanvas.width + col) * 4;
                         const rr = imageData.data[idx];
                         const gg = imageData.data[idx + 1];
                         const bb = imageData.data[idx + 2];
@@ -376,12 +567,12 @@ const DrawingPage = () => {
                     }
                 }
                 setGrid(newGrid);
-                setCanvasCreated(true);
                 setHistory([newGrid]);
                 setHistoryIndex(0);
+                setCanvasCreated(true); // Show the canvas immediately
             };
             img.crossOrigin = 'Anonymous';
-            img.src = `/published/${imgData.filename}`;
+            img.src = imgData.url || `/published/${imgData.filename}`;
             localStorage.removeItem('importedImage');
         }
         // eslint-disable-next-line
@@ -422,36 +613,29 @@ const DrawingPage = () => {
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f5f5f7' }}>
             <div style={{ width: '100%', maxWidth: 900, margin: '0 auto', background: '#fff', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.08)', padding: 32, marginTop: 32 }}>
                 <h1 style={{ textAlign: 'center', fontWeight: 700, fontSize: 36, letterSpacing: -1, color: '#222' }}>8-bit Drawing</h1>
-                {!canvasCreated && (
-                    <div style={{ marginBottom: 16 }}>
-                        <label>
-                            Width:
-                            <input
-                                type="number"
-                                min={MIN_SIZE}
-                                max={MAX_SIZE}
-                                step={STEP}
-                                value={width}
-                                onChange={e => setWidth(Number(e.target.value))}
-                                style={{ margin: '0 8px' }}
-                            />
-                        </label>
-                        <label>
-                            Height:
-                            <input
-                                type="number"
-                                min={MIN_SIZE}
-                                max={MAX_SIZE}
-                                step={STEP}
-                                value={height}
-                                onChange={e => setHeight(Number(e.target.value))}
-                                style={{ margin: '0 8px' }}
-                            />
-                        </label>
-                        <button onClick={handleCreateCanvas}>Create Canvas</button>
-                        {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
-                    </div>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
+                    <label style={{ textAlign: 'center', marginBottom: 8 }}>
+                        Number of cubes (each cube is 3x3 pixels):
+                        <input
+                            type="number"
+                            min={5}
+                            max={17}
+                            value={numCubesX}
+                            onChange={e => setNumCubesX(Number(e.target.value))}
+                            style={{ margin: '0 8px' }}
+                        />
+                        <input
+                            type="number"
+                            min={5}
+                            max={17}
+                            value={numCubesY}
+                            onChange={e => setNumCubesY(Number(e.target.value))}
+                            style={{ margin: '0 8px' }}
+                        />
+                    </label>
+                    <button onClick={handleCreateCanvas} style={{ marginTop: 8, alignSelf: 'center' }}>Create Canvas</button>
+                    {error && <div style={{ color: 'red', marginTop: 8, textAlign: 'center' }}>{error}</div>}
+                </div>
                 <input
                     type="file"
                     accept="image/*"
@@ -464,7 +648,7 @@ const DrawingPage = () => {
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16 }}>
                             <button onClick={handleUndo} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#e0e0e0', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Undo</button>
                             <button onClick={handleRedo} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#e0e0e0', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Redo</button>
-                            <button onClick={() => { setCanvasCreated(false); setGrid([]); setHistory([]); setHistoryIndex(-1); setWidth(15); setHeight(15); }} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#f44336', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Reset</button>
+                            <button onClick={() => { setCanvasCreated(false); setGrid([]); setHistory([]); setHistoryIndex(-1); setNumCubesX(5); setNumCubesY(5); }} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#f44336', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }}>Reset</button>
                         </div>
                         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
                             {COLORS.map(color => (
@@ -585,28 +769,35 @@ const DrawingPage = () => {
                             )}
                             {/* Grid pixels */}
                             {grid.map((rowArr, rowIdx) =>
-                                rowArr.map((color, colIdx) => (
-                                    <div
-                                        key={`${rowIdx}-${colIdx}`}
-                                        onMouseDown={() => handleMouseDown(rowIdx, colIdx)}
-                                        onMouseEnter={() => handleMouseEnter(rowIdx, colIdx)}
-                                        style={{
-                                            width: 20,
-                                            height: 20,
-                                            background: color,
-                                            border: '1px solid #bbb',
-                                            boxSizing: 'border-box',
-                                            position: 'relative',
-                                            zIndex: 1,
-                                        }}
-                                    />
-                                ))
+                                rowArr.map((color, colIdx) => {
+                                    const isCubeRow = rowIdx % 3 === 0 && rowIdx !== 0;
+                                    const isCubeCol = colIdx % 3 === 0 && colIdx !== 0;
+                                    return (
+                                        <div
+                                            key={`${rowIdx}-${colIdx}`}
+                                            onMouseDown={() => handleMouseDown(rowIdx, colIdx)}
+                                            onMouseEnter={() => handleMouseEnter(rowIdx, colIdx)}
+                                            style={{
+                                                width: 20,
+                                                height: 20,
+                                                background: color,
+                                                border: '1px solid #bbb',
+                                                borderTop: isCubeRow ? '2px solid #888' : '1px solid #bbb',
+                                                borderLeft: isCubeCol ? '2px solid #888' : '1px solid #bbb',
+                                                boxSizing: 'border-box',
+                                                position: 'relative',
+                                                zIndex: 1,
+                                            }}
+                                        />
+                                    );
+                                })
                             )}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
                             <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handleDownload}>Download</button>
                             <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => fileInputRef.current.click()}>Upload</button>
                             <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handlePublish}>Publish</button>
+                            <button style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: '#0071e3', color: '#fff', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={handleDownloadInstructions}>Download Instructions</button>
                         </div>
                         {/* Publish Modal */}
                         {showPublishModal && (

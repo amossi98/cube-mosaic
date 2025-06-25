@@ -32,7 +32,140 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Mobile styles */
+@media (max-width: 600px) {
+
+  body,
+  html {
+    padding: 0;
+    margin: 0;
+    width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .App {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    width: 100vw;
+  }
+
+  nav {
+    flex-direction: column !important;
+    width: 100vw !important;
+    padding: 8px 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  nav a {
+    margin: 0 0 8px 0 !important;
+    font-size: 18px !important;
+  }
+
+  h1 {
+    font-size: 24px !important;
+    margin: 16px 0 !important;
+  }
+
+  .gallery-grid,
+  .drawing-controls {
+    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    width: 100vw !important;
+    padding: 0 4vw !important;
+  }
+
+  .gallery-grid>div,
+  .drawing-controls>div {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .drawing-canvas {
+    width: 98vw !important;
+    height: auto !important;
+    max-width: 98vw !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
+    display: block !important;
+  }
+
+  input[type="number"],
+  input[type="text"],
+  textarea {
+    width: 100% !important;
+    font-size: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  button {
+    width: 100%;
+    font-size: 16px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .modal {
+    min-width: 90vw !important;
+    max-width: 98vw !important;
+    padding: 8vw 2vw !important;
+  }
+
+  .gallery-controls {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr !important;
+    width: 100vw !important;
+    justify-items: center !important;
+  }
+
+  .drawing-controls,
+  .drawing-header,
+  .drawing-canvas {
+    text-align: center !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 auto !important;
+  }
+
+  label,
+  .drawing-header,
+  .drawing-controls,
+  .drawing-canvas {
+    text-align: center !important;
+    width: 100% !important;
+  }
+}
+
+/* Center drawing controls and text on desktop as well */
+.drawing-controls,
+.drawing-header,
+.drawing-canvas {
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+label,
+.drawing-header,
+.drawing-controls,
+.drawing-canvas {
+  text-align: center;
+  width: 100%;
 }

@@ -75,19 +75,24 @@ const GalleryPage = () => {
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f5f5f7' }}>
             <div style={{ width: '100%', maxWidth: 1100, margin: '0 auto', background: '#fff', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.08)', padding: 32, marginTop: 32 }}>
                 <h1 style={{ textAlign: 'center', fontWeight: 700, fontSize: 36, letterSpacing: -1, color: '#222' }}>Gallery</h1>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 16px 0' }}>
-                    <div style={{ display: 'flex', gap: 16 }}>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'relevant' ? '#0071e3' : '#eee', color: sortBy === 'relevant' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('relevant')}>Sort by: Relevant</button>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'likes' ? '#0071e3' : '#eee', color: sortBy === 'likes' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('likes')}>Sort by: Likes</button>
-                        <button style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: sortBy === 'date' ? '#0071e3' : '#eee', color: sortBy === 'date' ? '#fff' : '#222', fontWeight: 600, fontSize: 16, cursor: 'pointer' }} onClick={() => setSortBy('date')}>Sort by: Date</button>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '32px 0 16px 0' }}>
+                    <div className="gallery-controls" style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', width: '100%' }}>
+                        <label htmlFor="sortDropdown" style={{ fontWeight: 600 }}>Sort by:</label>
+                        <select id="sortDropdown" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #ccc', fontSize: 16 }}>
+                            <option value="relevant">Relevant</option>
+                            <option value="likes">Likes</option>
+                            <option value="date">Date</option>
+                        </select>
+                        <input type="text" placeholder="Search..." style={{ padding: 8, borderRadius: 8, border: '1px solid #ccc', fontSize: 16, width: 200 }} />
                     </div>
-                    <input type="text" placeholder="Search..." style={{ padding: 8, borderRadius: 8, border: '1px solid #ccc', fontSize: 16, width: 200 }} />
                 </div>
-                <div style={{
+                <div className="gallery-grid" style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                     gap: 16,
                     marginTop: 32,
+                    justifyItems: 'center',
+                    width: '100%'
                 }}>
                     {images.map((img, idx) => {
                         const isLiked = likedImages.includes(img.id);
